@@ -11,7 +11,7 @@ import torch
 from PIL import Image
 
 from modules import shared
-from modules.models import reload_model, unload_model
+from modules.models import load_model, unload_model
 from modules.ui import create_refresh_button
 
 torch._C._jit_set_profiling_mode(False)
@@ -33,12 +33,13 @@ params = {
     'hr_upscaler': 'ESRGAN_4x',
     'hr_scale': '1.0',
     'seed': -1,
-    'sampler_name': 'DPM++ 2M Karras',
+    'sampler_name': 'DPM++ 2M',
     'steps': 32,
     'cfg_scale': 7,
     'textgen_prefix': 'Please provide a detailed and vivid description of [subject]',
     'sd_checkpoint': ' ',
-    'checkpoint_list': [" "]
+    'checkpoint_list': [" "],
+    'last_model': ""
 }
 
 
@@ -46,6 +47,7 @@ def give_VRAM_priority(actor):
     global shared, params
 
     if actor == 'SD':
+        params["last_model"] = shared.model_name
         unload_model()
         print("Requesting Auto1111 to re-load last checkpoint used...")
         response = requests.post(url=f'{params["address"]}/sdapi/v1/reload-checkpoint', json='')
@@ -55,7 +57,8 @@ def give_VRAM_priority(actor):
         print("Requesting Auto1111 to vacate VRAM...")
         response = requests.post(url=f'{params["address"]}/sdapi/v1/unload-checkpoint', json='')
         response.raise_for_status()
-        reload_model()
+        if params["last_model"]:
+            shared.model, shared.tokenizer = load_model(params["last_model"])
 
     elif actor == 'set':
         print("VRAM mangement activated -- requesting Auto1111 to vacate VRAM...")
@@ -339,7 +342,7 @@ def ui():
                     height = gr.Slider(64, 2048, value=params['height'], step=64, label='Height')
                 with gr.Column(variant="compact", elem_id="sampler_col"):
                     with gr.Row(elem_id="sampler_row"):
-                        sampler_name = gr.Dropdown(value=params['sampler_name'], label='Sampling method', elem_id="sampler_box")
+                        sampler_name = gr.Dropdown(value=params['sampler_name'], allow_custom_value=True, label='Sampling method', elem_id="sampler_box")
                         create_refresh_button(sampler_name, lambda: None, lambda: {'choices': get_samplers()}, 'refresh-button')
                     steps = gr.Slider(1, 150, value=params['steps'], step=1, label="Sampling steps", elem_id="steps_box")
             with gr.Row():
